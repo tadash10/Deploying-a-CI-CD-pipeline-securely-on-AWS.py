@@ -1,0 +1,167 @@
+import subprocess
+import json
+import boto3
+from botocore.exceptions import ClientError
+
+# Replace these with your actual values
+AWS_REGION = 'us-west-2'
+PIPELINE_NAME = 'MyPipeline'
+REPO_NAME = 'MyRepo'
+BUCKET_NAME = 'my-pipeline-artifacts-bucket'
+CODEBUILD_ROLE_NAME = 'CodeBuildServiceRole'
+PIPELINE_ROLE_NAME = 'CodePipelineServiceRole'
+SOURCE_STAGE_NAME = 'Source'
+BUILD_STAGE_NAME = 'Build'
+DEPLOY_STAGE_NAME = 'Deploy'
+
+def run_command(command):
+    result = subprocess.run(command, shell=True, text=True, capture_output=True)
+    if result.returncode != 0:
+        print(f"Error running command: {result.stderr}")
+    return result.stdout
+
+def create_s3_bucket(bucket_name):
+    command = f"aws s3api create-bucket --bucket {bucket_name} --region {AWS_REGION} --create-bucket-configuration LocationConstraint={AWS_REGION}"
+    run_command(command)
+    print(f"S3 bucket '{bucket_name}' created.")
+
+def create_iam_role(role_name, policy_document, role_description):
+    try:
+        iam = boto3.client('iam', region_name=AWS_REGION)
+        response = iam.create_role(
+            RoleName=role_name,
+            AssumeRolePolicyDocument=policy_document,
+            Description=role_description
+        )
+        print(f"IAM Role '{role_name}' created.")
+        return response['Role']['Arn']
+    except ClientError as e:
+        print(f"Error creating IAM role: {e}")
+        return None
+
+def attach_policy_to_role(role_name, policy_arn):
+    command = f"aws iam attach-role-policy --role-name {role_name} --policy-arn {policy_arn}"
+    run_command(command)
+    print(f"Policy '{policy_arn}' attached to role '{role_name}'.")
+
+def create_codebuild_project(project_name, role_arn, s3_bucket):
+    command = f"""
+    aws codebuild create-project \
+        --name {project_name} \
+        --source type=GITHUB,location=https://github.com/myorg/{REPO_NAME}.git \
+        --artifacts type=S3,location={s3_bucket} \
+        --environment type=LINUX_CONTAINER,computeType=BUILD_GENERAL1_SMALL,image=aws/codebuild/standard:5.0 \
+        --service-role {role_arn} \
+        --region {AWS_REGION}
+    """
+    run_command(command)
+    print(f"CodeBuild project '{project_name}' created.")
+
+def create_codepipeline():
+    # Define the pipeline structure
+    pipeline_json = {
+        "pipeline": {
+            "name": PIPELINE_NAME,
+            "roleArn": f"arn:aws:iam::{account_id}:role/{PIPELINE_ROLE_NAME}",
+            "artifactStore": {
+                "type": "S3",
+                "location": BUCKET_NAME
+            },
+            "stages": [
+                {
+                    "name": SOURCE_STAGE_NAME,
+                    "actions": [
+                        {
+                            "name": "SourceAction",
+                            "actionTypeId": {
+                                "category": "Source",
+                                "owner": "ThirdParty",
+                                "provider": "GitHub",
+                                "version": "1"
+                            },
+                            "outputArtifacts": [{"name": "SourceArtifact"}],
+                            "configuration": {
+                                "Owner": "myorg",
+                                "Repo": REPO_NAME,
+                                "Branch": "main",
+                                "OAuthToken": "YOUR_GITHUB_OAUTH_TOKEN"
+                            },
+                            "runOrder": 1
+                        }
+                    ]
+                },
+                {
+                    "name": BUILD_STAGE_NAME,
+                    "actions": [
+                        {
+                            "name": "BuildAction",
+                            "actionTypeId": {
+                                "category": "Build",
+                                "owner": "AWS",
+                                "provider": "CodeBuild",
+                                "version": "1"
+                            },
+                            "inputArtifacts": [{"name": "SourceArtifact"}],
+                            "outputArtifacts": [{"name": "BuildArtifact"}],
+                            "configuration": {
+                                "ProjectName": "MyCodeBuildProject"
+                            },
+                            "runOrder": 1
+                        }
+                    ]
+                }
+                # Add more stages as needed
+            ]
+        }
+    }
+
+    # Create the pipeline
+    command = f"aws codepipeline create-pipeline --cli-input-json '{json.dumps(pipeline_json)}'"
+    run_command(command)
+    print(f"CodePipeline '{PIPELINE_NAME}' created.")
+
+def main():
+    # Create S3 bucket
+    create_s3_bucket(BUCKET_NAME)
+    
+    # Create IAM roles
+    codebuild_role_policy = json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "codebuild.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+            }
+        ]
+    })
+    pipeline_role_policy = json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "codepipeline.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+            }
+        ]
+    })
+    
+    codebuild_role_arn = create_iam_role(CODEBUILD_ROLE_NAME, codebuild_role_policy, "Role for CodeBuild")
+    pipeline_role_arn = create_iam_role(PIPELINE_ROLE_NAME, pipeline_role_policy, "Role for CodePipeline")
+    
+    if codebuild_role_arn and pipeline_role_arn:
+        attach_policy_to_role(CODEBUILD_ROLE_NAME, "arn:aws:iam::aws:policy/service-role/AWSCodeBuildAdminAccess")
+        attach_policy_to_role(PIPELINE_ROLE_NAME, "arn:aws:iam::aws:policy/AWSCodePipelineFullAccess")
+        
+        # Create CodeBuild project
+        create_codebuild_project("MyCodeBuildProject", codebuild_role_arn, BUCKET_NAME)
+        
+        # Create CodePipeline
+        create_codepipeline()
+
+if __name__ == "__main__":
+    main()
