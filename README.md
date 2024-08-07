@@ -24,8 +24,9 @@ Prerequisites
 
 Setup Instructions
 1. Clone the Repository
-2. git clone https://github.com/your-repo/aws-ci-cd-pipeline-setup.git
-cd aws-ci-cd-pipeline-setup
+2.
+3.         git clone https://github.com/your-repo/aws-ci-cd-pipeline-setup.git
+           cd aws-ci-cd-pipeline-setup
 
 2. Update Configuration
 
@@ -54,7 +55,7 @@ Execute the script to set up the AWS CI/CD pipeline:
 
 bash
 
-python pipeline_setup.py
+      python pipeline_setup.py
 
 CLI Commands
 
@@ -63,7 +64,7 @@ Create an S3 Bucket
 
 bash
 
-aws s3api create-bucket --bucket your-bucket-name --region your-region --create-bucket-configuration LocationConstraint=your-region
+          aws s3api create-bucket --bucket your-bucket-name --region your-region --create-bucket-configuration LocationConstraint=your-region
 
 Set S3 Bucket Policy
 
@@ -75,13 +76,13 @@ Enable Server-Side Encryption
 
 bash
 
-aws s3api put-bucket-encryption --bucket your-bucket-name --server-side-encryption-configuration '{"Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}'
+              aws s3api put-bucket-encryption --bucket your-bucket-name --server-side-encryption-configuration '{"Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}'
 
 Create IAM Role
 
 bash
 
-aws iam create-role --role-name your-role-name --assume-role-policy-document '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "codebuild.amazonaws.com"}, "Action": "sts:AssumeRole"}]}'
+             aws iam create-role --role-name your-role-name --assume-role-policy-document '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "codebuild.amazonaws.com"}, "Action": "sts:AssumeRole"}]}'
 
 Attach IAM Policy
 
@@ -132,9 +133,9 @@ echo "Installing Python dependencies..."
 pip install boto3
 
 # Clone the repository
-echo "Cloning the repository..."
-git clone $REPO_URL
-cd aws-ci-cd-pipeline-setup
+                  echo "Cloning the repository..."
+                  git clone $REPO_URL
+                cd aws-ci-cd-pipeline-setup
 
 # Run the Python script
 echo "Running the setup script..."
